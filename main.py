@@ -310,13 +310,13 @@ class SpringAdvancedForecastingBot(ForecastBot):
     def _llm_config_defaults(self) -> Dict[str, str]:
         # Non-forecaster roles stay as-is; forecasters are set explicitly in _get_model_forecast.
         return {
-            "default":        "openrouter/qwen/qwen3-235b-a22b",
-            "parser":         "openrouter/qwen/qwen3-235b-a22b",
-            "summarizer":     "openrouter/qwen/qwen3-235b-a22b",
-            "query_optimizer":"openrouter/qwen/qwen3-235b-a22b",
-            "critic":         "openrouter/qwen/qwen3-235b-a22b",
-            "red_team":       "openrouter/anthropic/claude-sonnet-4-6",
-            "decomposer":     "openrouter/qwen/qwen3-235b-a22b",
+            "default":        "openrouter/openrouter/free",
+            "parser":         "openrouter/openrouter/free",
+            "summarizer":     "openrouter/openrouter/free",
+            "query_optimizer":"openrouter/openrouter/free",
+            "critic":         "openrouter/openrouter/free",
+            "red_team":       "openrouter/openrouter/free",
+            "decomposer":     "openrouter/openrouter/free",
         }
 
     # ------------------------------------------------------------------
@@ -1219,8 +1219,8 @@ Percentile 90: XX
 
     # Ensemble forecasters for all question types
     _FORECASTERS = [
-        "openrouter/qwen/qwen3-235b-a22b",
-        "openrouter/anthropic/claude-sonnet-4-6",
+        "openrouter/openrouter/free",
+        "openrouter/openrouter/free",
     ]
 
     async def _run_forecast_on_binary(self, question: BinaryQuestion, research: str) -> ReasonedPrediction[float]:
