@@ -297,10 +297,20 @@ class SpringAdvancedForecastingBot(ForecastBot):
 
     _structure_output_validation_samples = 1
 
-    def __init__(self, *args, bot_name: str = "forecasting-bot", flags: Optional[BotFeatureFlags] = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        bot_name: str = "forecasting-bot",
+        flags: Optional[BotFeatureFlags] = None,
+        extremize_strength_cap: float = 2.0,
+        use_median_forecast: bool = False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.bot_name = bot_name
         self.flags = flags or BotFeatureFlags()
+        self.extremize_strength_cap = extremize_strength_cap
+        self.use_median_forecast = use_median_forecast
 
         self.exa_searcher = ExaSearcher() if os.getenv("EXA_API_KEY") else None
         self.firecrawl_searcher = FirecrawlSearcher() if os.getenv("FIRECRAWL_API_KEY") else None
@@ -555,6 +565,26 @@ Rules:
             return 0.5 * (by[0.4] + by[0.6])
         return float(sorted(pcts, key=lambda x: x.percentile)[len(pcts) // 2].value) if pcts else 0.0
 
+    def _medianize_numeric_distribution(
+        self, dist: NumericDistribution, question: NumericQuestion
+    ) -> NumericDistribution:
+        base_pcts = [Percentile(percentile=float(p.percentile), value=float(p.value)) for p in getattr(dist, "declared_percentiles", [])]
+        if not base_pcts:
+            return dist
+
+        med = self._median_from_40_60(base_pcts)
+        span = max(1e-4, abs(med) * 1e-4, 1e-3)
+        med_pcts = [
+            Percentile(percentile=0.1, value=med - 2.0 * span),
+            Percentile(percentile=0.2, value=med - 1.0 * span),
+            Percentile(percentile=0.4, value=med - 0.5 * span),
+            Percentile(percentile=0.6, value=med + 0.5 * span),
+            Percentile(percentile=0.8, value=med + 1.0 * span),
+            Percentile(percentile=0.9, value=med + 2.0 * span),
+        ]
+        med_pcts = self._enforce_monotone(med_pcts)
+        return NumericDistribution.from_question(med_pcts, question)
+
     @staticmethod
     def _p10_p90(pcts: List[Percentile]) -> Tuple[Optional[float], Optional[float]]:
         by = {round(float(p.percentile), 3): float(p.value) for p in pcts}
@@ -666,7 +696,7 @@ Text:
                 base = 1.0 + (base - 1.0) * 0.3
             elif days < 60:
                 base = 1.0 + (base - 1.0) * 0.6
-        return float(np.clip(base, 0.9, 2.0))
+        return float(np.clip(base, 0.9, self.extremize_strength_cap))
 
     async def _red_team_forecast(self, question: MetaculusQuestion, research: str, initial_pred: float) -> float:
         self._ensure_some_research_or_raise(research)
@@ -1432,25 +1462,21 @@ Percentile 90: XX
     async def _run_forecast_on_numeric(self, question: NumericQuestion, research: str) -> ReasonedPrediction[NumericDistribution]:
         self._ensure_some_research_or_raise(research)
         if not self.flags.enable_numeric_regimes:
-            return await self._run_forecast_on_numeric_generic(question, research)
+            result = await self._run_forecast_on_numeric_generic(question, research)
+        else:
+            regime = self._detect_numeric_regime(question, research)
+            if regime == NumericRegime.PARTIAL_REVEAL:
+                result = await self._forecast_numeric_partial_reveal(question, research)
+            elif regime == NumericRegime.LEVEL_SERIES_ENDVALUE:
+                result = await self._forecast_numeric_level_series_endvalue(question, research)
+            elif regime == NumericRegime.STRUCTURED_TS:
+                result = await self._forecast_numeric_structured_ts(question, research)
+            else:
+                result = await self._run_forecast_on_numeric_generic(question, research)
 
-        regime = self._detect_numeric_regime(question, research)
-
-        if regime == NumericRegime.PARTIAL_REVEAL_SUM:
-            try:
-                return await self._forecast_numeric_partial_reveal(question, research)
-            except Exception as e:
-                logger.warning(f"Partial-reveal regime failed, fallback to generic: {e}")
-                return await self._run_forecast_on_numeric_generic(question, research)
-
-        if regime == NumericRegime.STRUCTURED_TS:
-            try:
-                return await self._forecast_numeric_structured_ts(question, research)
-            except Exception as e:
-                logger.warning(f"Structured TS regime failed, fallback to generic: {e}")
-                return await self._run_forecast_on_numeric_generic(question, research)
-
-        return await self._run_forecast_on_numeric_generic(question, research)
+        if self.use_median_forecast and isinstance(result.prediction_value, NumericDistribution):
+            result.prediction_value = self._medianize_numeric_distribution(result.prediction_value, question)
+        return result
 
     async def _run_forecast_on_numeric_wrapper(self, question: NumericQuestion, research: str) -> ReasonedPrediction[NumericDistribution]:
         return await self._run_forecast_on_numeric(question, research)
@@ -1494,11 +1520,24 @@ if __name__ == "__main__":
         flags=flags,
     )
 
+    minibench_bot = SpringAdvancedForecastingBot(
+        research_reports_per_question=1,
+        predictions_per_research_report=1,
+        use_research_summary_to_forecast=False,
+        publish_reports_to_metaculus=True,
+        skip_previously_forecasted_questions=True,
+        extra_metadata_in_explanation=True,
+        bot_name=args.bot_name,
+        flags=flags,
+        extremize_strength_cap=4.5,
+        use_median_forecast=True,
+    )
+
     client = MetaculusClient()
 
     async def run_all():
         """Forecast on MiniBench and Spring AI tournaments only."""
-        minibench_task = bot.forecast_on_tournament(client.CURRENT_MINIBENCH_ID, return_exceptions=True)
+        minibench_task = minibench_bot.forecast_on_tournament(client.CURRENT_MINIBENCH_ID, return_exceptions=True)
         spring_ai_task = bot.forecast_on_tournament(client.CURRENT_AI_COMPETITION_ID, return_exceptions=True)
         minibench_results, spring_ai_results = await asyncio.gather(minibench_task, spring_ai_task)
         logger.info(f"MiniBench: {len(minibench_results)} question(s) processed.")
