@@ -300,7 +300,7 @@ class SpringAdvancedForecastingBot(ForecastBot):
     def __init__(
         self,
         *args,
-        bot_name: str = "forecasting-bot",
+        bot_name: str = "flash daniel",
         flags: Optional[BotFeatureFlags] = None,
         extremize_strength_cap: float = 2.0,
         use_median_forecast: bool = False,
@@ -1492,7 +1492,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run the Advanced Forecasting Bot (Exa+Firecrawl, Qwen3 + Claude Sonnet 4.6) — MiniBench & Spring AI only"
     )
-    parser.add_argument("--bot-name", type=str, default="forecasting-bot")
+    parser.add_argument("--bot-name", type=str, default="flash daniel")
     parser.add_argument("--no-extremize", action="store_true")
     parser.add_argument("--no-decomposition", action="store_true")
     parser.add_argument("--no-numeric-regimes", action="store_true")
