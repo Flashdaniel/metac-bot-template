@@ -297,7 +297,7 @@ class SpringAdvancedForecastingBot(ForecastBot):
 
     _structure_output_validation_samples = 1
 
-    def __init__(self, *args, bot_name: str = "botduke", flags: Optional[BotFeatureFlags] = None, **kwargs):
+    def __init__(self, *args, bot_name: str = "forecasting-bot", flags: Optional[BotFeatureFlags] = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot_name = bot_name
         self.flags = flags or BotFeatureFlags()
@@ -1466,7 +1466,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run the Advanced Forecasting Bot (Exa+Firecrawl, Qwen3 + Claude Sonnet 4.6) — MiniBench & Spring AI only"
     )
-    parser.add_argument("--bot-name", type=str, default="botduke")
+    parser.add_argument("--bot-name", type=str, default="forecasting-bot")
     parser.add_argument("--no-extremize", action="store_true")
     parser.add_argument("--no-decomposition", action="store_true")
     parser.add_argument("--no-numeric-regimes", action="store_true")
