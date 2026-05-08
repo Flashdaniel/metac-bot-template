@@ -1538,7 +1538,7 @@ if __name__ == "__main__":
     async def run_all():
         """Forecast on MiniBench and Spring AI tournaments only."""
         minibench_task = minibench_bot.forecast_on_tournament(client.CURRENT_MINIBENCH_ID, return_exceptions=True)
-        spring_ai_task = bot.forecast_on_tournament(client.CURRENT_AI_COMPETITION_ID, return_exceptions=True)
+        spring_ai_task = bot.forecast_on_tournament(33022, return_exceptions=True)
         minibench_results, spring_ai_results = await asyncio.gather(minibench_task, spring_ai_task)
         logger.info(f"MiniBench: {len(minibench_results)} question(s) processed.")
         logger.info(f"Spring AI: {len(spring_ai_results)} question(s) processed.")
