@@ -1493,6 +1493,7 @@ if __name__ == "__main__":
         description="Run the Advanced Forecasting Bot (Exa+Firecrawl, Qwen3 + Claude Sonnet 4.6) — MiniBench & Spring AI only"
     )
     parser.add_argument("--bot-name", type=str, default="flash daniel")
+    parser.add_argument("--mode", type=str, default="tournament", choices=["tournament", "test_questions", "metaculus_cup"])
     parser.add_argument("--no-extremize", action="store_true")
     parser.add_argument("--no-decomposition", action="store_true")
     parser.add_argument("--no-numeric-regimes", action="store_true")
@@ -1535,14 +1536,39 @@ if __name__ == "__main__":
 
     client = MetaculusClient()
 
-    async def run_all():
-        """Forecast on MiniBench and Spring AI tournaments only."""
-        minibench_task = minibench_bot.forecast_on_tournament(client.CURRENT_MINIBENCH_ID, return_exceptions=True)
-        spring_ai_task = bot.forecast_on_tournament(33022, return_exceptions=True)
-        minibench_results, spring_ai_results = await asyncio.gather(minibench_task, spring_ai_task)
-        logger.info(f"MiniBench: {len(minibench_results)} question(s) processed.")
-        logger.info(f"Spring AI: {len(spring_ai_results)} question(s) processed.")
-        return minibench_results + spring_ai_results
+    if args.mode == "test_questions":
+        # For test mode, forecast on specific test questions
+        async def run_test():
+            test_questions = []
+            for url in client.TEST_QUESTION_URLS:
+                try:
+                    question = client.get_question_by_url(url)
+                    test_questions.append(question)
+                except Exception as e:
+                    logger.warning(f"Failed to get test question from {url}: {e}")
+            if not test_questions:
+                logger.error("No test questions could be loaded")
+                return []
+            test_results = await bot.forecast_questions(test_questions, return_exceptions=True)
+            logger.info(f"Test questions: {len(test_results)} question(s) processed.")
+            return test_results
+        reports = asyncio.run(run_test())
+    elif args.mode == "metaculus_cup":
+        # For metaculus cup mode, run on the cup tournament
+        async def run_cup():
+            cup_results = await bot.forecast_on_tournament(client.CURRENT_METACULUS_CUP_ID, return_exceptions=True)
+            logger.info(f"Metaculus Cup: {len(cup_results)} question(s) processed.")
+            return cup_results
+        reports = asyncio.run(run_cup())
+    else:  # tournament mode (default)
+        async def run_all():
+            """Forecast on MiniBench and Spring AI tournaments only."""
+            minibench_task = minibench_bot.forecast_on_tournament(client.CURRENT_MINIBENCH_ID, return_exceptions=True)
+            spring_ai_task = bot.forecast_on_tournament(33022, return_exceptions=True)
+            minibench_results, spring_ai_results = await asyncio.gather(minibench_task, spring_ai_task)
+            logger.info(f"MiniBench: {len(minibench_results)} question(s) processed.")
+            logger.info(f"Spring AI: {len(spring_ai_results)} question(s) processed.")
+            return minibench_results + spring_ai_results
+        reports = asyncio.run(run_all())
 
-    reports = asyncio.run(run_all())
     bot.log_report_summary(reports)
